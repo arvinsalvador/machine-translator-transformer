@@ -13,6 +13,9 @@ from src.acquire_dataset import AcquisitionError, AcquisitionStats, acquire_data
 from src.prepare_data import PreparationError, PreparationStats, get_paths, prepare_dataset
 from src.tokenizer_utils import SentencePieceTokenizer
 from src.train_tokenizer import TokenizerTrainingError, TokenizerTrainingStats, get_paths as tokenizer_paths, train_tokenizer
+from src.inspect_model import synthetic_validation
+from src.model import architecture_summary, build_model
+from src.tokenizer_utils import load_tokenizer
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -64,12 +67,13 @@ def dashboard(config: dict[str, Any]) -> None:
     tokenizer_settings = config.get("tokenizer", {})
     preparation_metadata = load_metadata(PROJECT_ROOT / preprocessing.get("output_directory", "") / preprocessing.get("metadata_file", ""))
     tokenizer_metadata = load_metadata((PROJECT_ROOT / tokenizer_settings.get("model_prefix", "data/tokenizer/en_tl")).parent / tokenizer_settings.get("metadata_file", "tokenizer_metadata.json"))
-    st.subheader("Phase 4 – Tokenizer Training")
+    st.subheader("Phase 5 – Transformer Model")
     st.success("Phase 1 – Project Setup: Completed")
     st.write(f"Phase 2 – Dataset Acquisition: {phase_two}")
     st.write("Phase 3 – Data Preparation: " + ("Completed" if preparation_metadata and preparation_metadata.get("completed") else "Available (not completed)"))
-    st.info("Phase 4 – Tokenizer Training: Current")
-    st.write("Phase 5 – Transformer Model through Phase 7 – Translator Interface: Not Started")
+    st.write("Phase 4 – Tokenizer Training: " + ("Completed" if tokenizer_metadata and tokenizer_metadata.get("completed") else "Available (not completed)"))
+    st.info("Phase 5 – Transformer Model: Current")
+    st.write("Phase 6 – Training & Evaluation through Phase 7 – Translator Interface: Not Started")
     if tokenizer_metadata and tokenizer_metadata.get("completed"):
         st.success("A tokenizer has already been trained.")
     col1, col2, col3 = st.columns(3)
@@ -243,6 +247,42 @@ def tokenizer_page(config: dict[str, Any]) -> None:
         st.dataframe([{"ID": index, "Piece": tokenizer.id_to_piece(index)} for index in range(min(20, tokenizer.get_vocab_size()))], use_container_width=True, hide_index=True)
 
 
+def model_page(config: dict[str, Any]) -> None:
+    """Inspect and synthetically validate the untrained Phase 5 architecture."""
+    settings = config.get("tokenizer", {})
+    model_prefix = PROJECT_ROOT / settings.get("model_prefix", "data/tokenizer/en_tl")
+    model_path = model_prefix.with_suffix(".model")
+    st.title("Transformer Model")
+    st.caption("Untrained architecture – Phase 5. No optimizer, loss, backpropagation, or translation is performed.")
+    if not model_path.is_file():
+        st.warning("Complete Phase 4 tokenizer training first.")
+        return
+    tokenizer = load_tokenizer(model_path)
+    model = build_model(config, tokenizer)
+    summary = architecture_summary(model, config)
+    cols = st.columns(4)
+    cols[0].metric("Vocabulary", summary["vocab_size"])
+    cols[1].metric("Model dimension", summary["d_model"])
+    cols[2].metric("Attention heads", summary["attention_heads"])
+    cols[3].metric("Max sequence", summary["max_sequence_length"])
+    st.write(f"Encoder layers: {summary['encoder_layers']} · Decoder layers: {summary['decoder_layers']} · Feedforward: {summary['feedforward_dimension']} · Dropout: {summary['dropout']}")
+    st.write("**Embedding:** one shared English–Tagalog SentencePiece embedding. **Output:** raw vocabulary logits (no softmax).")
+    st.code("English tokens → Shared Embedding → Positional Encoding → Encoder × 2\n"
+            "                                             ↓ memory\n"
+            "Tagalog tokens → Shared Embedding → Positional Encoding → Decoder × 2 → Linear Projection → Vocabulary Logits")
+    st.write("**Encoder:** processes the complete English source sequence into contextual memory.\n\n**Decoder:** uses masked self-attention and cross-attention to that memory.\n\n**Masked attention:** prevents seeing future target tokens.\n\n**Cross-attention:** uses English encoder information when predicting future Tagalog tokens.")
+    metrics = st.columns(3)
+    metrics[0].metric("Total parameters", f"{summary['total']:,}")
+    metrics[1].metric("Trainable parameters", f"{summary['trainable']:,}")
+    metrics[2].metric("Parameter memory only", f"{summary['parameter_memory_bytes'] / 1_000_000:.1f} MB")
+    if st.button("Validate Model Architecture", type="primary"):
+        try:
+            shape = synthetic_validation(model, tokenizer)
+            st.success(f"Forward pass successful: output shape {shape}. No training performed.")
+        except (RuntimeError, ValueError, TypeError) as error:
+            st.error(str(error))
+
+
 def about_page() -> None:
     """Keep the project objective and Phase 2 scope explicit."""
     st.title("About")
@@ -254,7 +294,7 @@ def main() -> None:
     """Render the simple extensible Phase 2 navigation."""
     st.set_page_config(page_title="English–Tagalog Translator", layout="wide")
     config = load_config()
-    page = st.sidebar.radio("Navigation", ("Dashboard", "Dataset", "Data Preparation", "Tokenizer", "About"))
+    page = st.sidebar.radio("Navigation", ("Dashboard", "Dataset", "Data Preparation", "Tokenizer", "Model", "About"))
     if page == "Dashboard":
         dashboard(config)
     elif page == "Dataset":
@@ -263,6 +303,8 @@ def main() -> None:
         preparation_page(config)
     elif page == "Tokenizer":
         tokenizer_page(config)
+    elif page == "Model":
+        model_page(config)
     else:
         about_page()
 

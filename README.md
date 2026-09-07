@@ -6,17 +6,17 @@ Dataset: `visheratin/laion-coco-nllb`
 
 ## Current phase
 
-**Phase 4 – SentencePiece Tokenizer Training**
+**Phase 5 – Transformer Encoder–Decoder Model**
 
-Phases 1–3 are completed. Phase 4 trains a shared English–Tagalog SentencePiece BPE tokenizer using **only** `data/processed/train.jsonl`. Validation and test pairs are excluded from vocabulary learning to prevent leakage.
+Phases 1–4 are completed. Phase 5 implements the compact custom PyTorch Transformer encoder–decoder. It is **untrained**: no optimizer, loss calculation, backpropagation, checkpoint, BLEU, or translation is performed until Phase 6.
 
 ## Project phases
 
 1. Phase 1 – Project Setup and Resource Configuration (Completed)
 2. Phase 2 – Dataset Acquisition (Completed / available)
 3. Phase 3 – Data Preparation and Dataset Splitting (Completed)
-4. Phase 4 – Tokenizer Training (Current)
-5. Phase 5 – Transformer Model Implementation
+4. Phase 4 – Tokenizer Training (Completed)
+5. Phase 5 – Transformer Model Implementation (Current)
 6. Phase 6 – Model Training and Evaluation
 7. Phase 7 – Translator Interface
 
@@ -106,3 +106,20 @@ Expected tokenizer artifacts:
 - `data/tokenizer/tokenizer_metadata.json`
 
 In Streamlit, select **Tokenizer** to train with deliberate overwrite protection, inspect the first 20 vocabulary pieces, and try tokenizing English or Tagalog text. No Transformer model or translation is implemented in this phase.
+
+## Transformer model
+
+Phase 5 builds one small batch-first Transformer encoder–decoder from the actual trained tokenizer vocabulary. It uses a shared token embedding, sinusoidal positional encoding, 2 encoder layers, 2 decoder layers, 4 attention heads, `d_model=128`, feed-forward dimension 512, dropout 0.1, source/target padding masks, and a decoder causal mask. The final linear projection returns raw logits; it deliberately does not apply softmax.
+
+- Self-attention lets tokens within a sequence attend to one another.
+- Masked self-attention prevents the decoder from seeing future target tokens.
+- Cross-attention lets the decoder attend to the encoder's English memory.
+
+Inspect the untrained model and run its tiny synthetic forward-pass check:
+
+```bash
+docker compose run --rm translator python -m src.inspect_model
+docker compose run --rm translator python -m unittest discover -s tests -v
+```
+
+Use the Streamlit command above and select **Model** for an architecture diagram, parameter counts, and the same no-grad synthetic validation. Training becomes available in Phase 6.
