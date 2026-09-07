@@ -1,0 +1,15 @@
+services:
+  translator:
+    build: .
+    container_name: transformer-translator
+    volumes:
+      - .:/app
+    ports:
+      - "8501:8501"
+    environment:
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      TOKENIZERS_PARALLELISM: "false"
+    cpus: 2.0
+    mem_limit: 4g
+    command: python -m src.check_environment

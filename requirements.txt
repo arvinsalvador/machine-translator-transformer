@@ -1,0 +1,9 @@
+datasets
+sentencepiece
+sacrebleu
+pandas
+numpy
+pyyaml
+tqdm
+streamlit
+matplotlib

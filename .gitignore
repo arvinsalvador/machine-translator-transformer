@@ -1,0 +1,31 @@
+# Python, environments, and editor settings
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.env
+.env.*
+.vscode/
+.idea/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+Thumbs.db
+
+# Generated project artifacts; retain placeholders
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/tokenizer/*
+!data/tokenizer/.gitkeep
+models/checkpoints/*
+!models/checkpoints/.gitkeep
+logs/*
+!logs/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.bin

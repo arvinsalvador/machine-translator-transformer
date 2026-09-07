@@ -1,0 +1,48 @@
+project:
+  name: "English-Tagalog Transformer Translator"
+  version: "0.1.0"
+  random_seed: 42
+dataset:
+  name: "visheratin/laion-coco-nllb"
+  source_language:
+    name: "English"
+    code: "eng"
+  target_language:
+    name: "Tagalog"
+    code: "tgl_Latn"
+  max_samples: 20000
+  quick_samples: 1000
+  train_ratio: 0.80
+  validation_ratio: 0.10
+  test_ratio: 0.10
+  max_sentence_length: 64
+tokenizer:
+  type: "sentencepiece_bpe"
+  vocab_size: 8000
+  special_tokens:
+    pad: "<pad>"
+    unknown: "<unk>"
+    bos: "<s>"
+    eos: "</s>"
+model:
+  d_model: 128
+  attention_heads: 4
+  encoder_layers: 2
+  decoder_layers: 2
+  feedforward_dimension: 512
+  dropout: 0.1
+  max_sequence_length: 64
+training:
+  batch_size: 16
+  epochs: 5
+  learning_rate: 0.0003
+  early_stopping:
+    enabled: true
+    patience: 2
+  checkpoint:
+    save_best_only: true
+resources:
+  prefer_gpu: true
+  allow_cpu_fallback: true
+  dataloader_workers: 2
+  max_cpu_threads: 2
