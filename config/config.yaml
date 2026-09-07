@@ -4,9 +4,11 @@ project:
   random_seed: 42
 dataset:
   name: "visheratin/laion-coco-nllb"
+  split: "train"
   source_language:
     name: "English"
     code: "eng"
+    field: "eng_caption"
   target_language:
     name: "Tagalog"
     code: "tgl_Latn"
@@ -16,6 +18,11 @@ dataset:
   validation_ratio: 0.10
   test_ratio: 0.10
   max_sentence_length: 64
+  acquisition:
+    scan_multiplier: 3
+    output_file: "data/raw/en_tl_pairs.jsonl"
+    metadata_file: "data/raw/acquisition_metadata.json"
+    preview_rows: 5
 tokenizer:
   type: "sentencepiece_bpe"
   vocab_size: 8000
