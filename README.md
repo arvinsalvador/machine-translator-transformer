@@ -6,9 +6,9 @@ Dataset: `visheratin/laion-coco-nllb`
 
 ## Current phase
 
-**Phase 6 – Transformer Training and Evaluation**
+**Phase 7 – Translator Inference and Final UI**
 
-Phases 1–5 are completed. Phase 6 trains the small custom Transformer with teacher forcing, cross-entropy loss, AdamW, validation-based early stopping, bounded checkpoints, and held-out test evaluation.
+All seven phases are implemented. Phase 7 loads the locally trained best checkpoint and SentencePiece tokenizer for bounded greedy English → Tagalog inference. No online translation API or pretrained translation model is used.
 
 ## Project phases
 
@@ -17,8 +17,8 @@ Phases 1–5 are completed. Phase 6 trains the small custom Transformer with tea
 3. Phase 3 – Data Preparation and Dataset Splitting (Completed)
 4. Phase 4 – Tokenizer Training (Completed)
 5. Phase 5 – Transformer Model Implementation (Completed)
-6. Phase 6 – Model Training and Evaluation (Current)
-7. Phase 7 – Translator Interface
+6. Phase 6 – Model Training and Evaluation (Completed)
+7. Phase 7 – Translator Interface (Current)
 
 ## Resource limits
 
@@ -145,4 +145,18 @@ docker compose run --rm translator python -m src.train --profile quick --force
 docker compose run --rm translator python -m src.evaluate --limit 200
 ```
 
-Only `models/checkpoints/best_model.pt` and `last_model.pt` are retained, alongside `training_history.json`, `training_metadata.json`, and `evaluation_results.json`. Evaluation uses greedy decoding on the test split only, and reports BLEU and chrF against dataset reference translations. Phase 7 will provide the public interactive translator.
+Only `models/checkpoints/best_model.pt` and `last_model.pt` are retained, alongside `training_history.json`, `training_metadata.json`, and `evaluation_results.json`. Evaluation uses greedy decoding on the test split only, and reports BLEU and chrF against dataset reference translations.
+
+## Translator inference
+
+The final Translator page and CLI use `best_model.pt`, the project’s own trained custom Transformer, and the shared SentencePiece tokenizer. Input is limited to one short caption-like sentence (500 characters and 64 tokenizer positions including BOS/EOS). Greedy decoding starts at BOS and stops at EOS or the model maximum length.
+
+```bash
+docker compose run --rm translator python -m src.inference --text "A student is reading a book."
+```
+
+Start Streamlit with the command above, open `http://localhost:8501`, and select **Translator**. The page caches the loaded model by checkpoint timestamp, shows token counts/timing, and retains only the latest 10 translations in browser session memory.
+
+### Limitations
+
+This is a small academic proof of concept: it uses a limited caption-style dataset, a 2-layer `d_model=128` Transformer, up to five training epochs, and greedy decoding. It works best on short sentences. Reference Tagalog data is machine-generated and not manually verified, so translation quality can vary.
