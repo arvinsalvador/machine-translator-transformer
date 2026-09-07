@@ -6,16 +6,16 @@ Dataset: `visheratin/laion-coco-nllb`
 
 ## Current phase
 
-**Phase 3 – Data Preparation and Dataset Splitting**
+**Phase 4 – SentencePiece Tokenizer Training**
 
-Phase 1 is completed. Phase 2 streams minimal English–Tagalog JSONL pairs. Phase 3 validates those pairs, conservatively normalizes text, removes duplicate pairs, and creates deterministic training, validation, and testing splits. Tokenizer training remains Phase 4.
+Phases 1–3 are completed. Phase 4 trains a shared English–Tagalog SentencePiece BPE tokenizer using **only** `data/processed/train.jsonl`. Validation and test pairs are excluded from vocabulary learning to prevent leakage.
 
 ## Project phases
 
 1. Phase 1 – Project Setup and Resource Configuration (Completed)
 2. Phase 2 – Dataset Acquisition (Completed / available)
-3. Phase 3 – Data Preparation and Dataset Splitting (Current)
-4. Phase 4 – Tokenizer Training
+3. Phase 3 – Data Preparation and Dataset Splitting (Completed)
+4. Phase 4 – Tokenizer Training (Current)
 5. Phase 5 – Transformer Model Implementation
 6. Phase 6 – Model Training and Evaluation
 7. Phase 7 – Translator Interface
@@ -84,3 +84,25 @@ Successful preparation creates:
 - `data/processed/preparation_metadata.json`
 
 The command requires a completed Phase 2 acquisition and refuses to overwrite existing processed output unless `--force` is supplied. Use the Streamlit command above and select **Data Preparation** to run the same backend through the UI.
+
+## Tokenizer training
+
+Phase 4 uses one shared SentencePiece BPE vocabulary for English and Tagalog. Both languages use Latin script and share names, numbers, punctuation, and borrowed words; a shared vocabulary keeps this small academic encoder-decoder implementation simple.
+
+The requested vocabulary target is 8,000 pieces. SentencePiece uses `hard_vocab_limit=False`, so a small debug corpus can safely produce a smaller actual vocabulary. Special-token IDs are explicitly validated: PAD `<pad>` = 0, UNK `<unk>` = 1, BOS `<s>` = 2, and EOS `</s>` = 3.
+
+```bash
+docker compose run --rm translator python -m src.train_tokenizer
+docker compose run --rm translator python -m src.train_tokenizer --force
+
+# Inspect an existing tokenizer; this performs tokenization only.
+docker compose run --rm translator python -m src.tokenizer_utils --text "A student is reading a book."
+```
+
+Expected tokenizer artifacts:
+
+- `data/tokenizer/en_tl.model`
+- `data/tokenizer/en_tl.vocab`
+- `data/tokenizer/tokenizer_metadata.json`
+
+In Streamlit, select **Tokenizer** to train with deliberate overwrite protection, inspect the first 20 vocabulary pieces, and try tokenizing English or Tagalog text. No Transformer model or translation is implemented in this phase.

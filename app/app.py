@@ -11,6 +11,8 @@ import yaml
 
 from src.acquire_dataset import AcquisitionError, AcquisitionStats, acquire_dataset, get_output_paths
 from src.prepare_data import PreparationError, PreparationStats, get_paths, prepare_dataset
+from src.tokenizer_utils import SentencePieceTokenizer
+from src.train_tokenizer import TokenizerTrainingError, TokenizerTrainingStats, get_paths as tokenizer_paths, train_tokenizer
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -58,11 +60,18 @@ def dashboard(config: dict[str, Any]) -> None:
     st.title("English → Tagalog Transformer Translator")
     raw_metadata = load_metadata(PROJECT_ROOT / config.get("dataset", {}).get("acquisition", {}).get("metadata_file", ""))
     phase_two = "Completed" if raw_metadata and raw_metadata.get("completed") else "Available (not completed)"
-    st.subheader("Phase 3 – Data Preparation")
+    preprocessing = config.get("preprocessing", {})
+    tokenizer_settings = config.get("tokenizer", {})
+    preparation_metadata = load_metadata(PROJECT_ROOT / preprocessing.get("output_directory", "") / preprocessing.get("metadata_file", ""))
+    tokenizer_metadata = load_metadata((PROJECT_ROOT / tokenizer_settings.get("model_prefix", "data/tokenizer/en_tl")).parent / tokenizer_settings.get("metadata_file", "tokenizer_metadata.json"))
+    st.subheader("Phase 4 – Tokenizer Training")
     st.success("Phase 1 – Project Setup: Completed")
     st.write(f"Phase 2 – Dataset Acquisition: {phase_two}")
-    st.info("Phase 3 – Data Preparation: Current")
-    st.write("Phase 4 – Tokenizer Training through Phase 7 – Translator Interface: Not Started")
+    st.write("Phase 3 – Data Preparation: " + ("Completed" if preparation_metadata and preparation_metadata.get("completed") else "Available (not completed)"))
+    st.info("Phase 4 – Tokenizer Training: Current")
+    st.write("Phase 5 – Transformer Model through Phase 7 – Translator Interface: Not Started")
+    if tokenizer_metadata and tokenizer_metadata.get("completed"):
+        st.success("A tokenizer has already been trained.")
     col1, col2, col3 = st.columns(3)
     col1.metric("Dataset maximum", dataset.get("max_samples", "Unknown"))
     col2.metric("Quick mode samples", dataset.get("quick_samples", "Unknown"))
@@ -174,6 +183,66 @@ def dataset_page(config: dict[str, Any]) -> None:
     st.info("Data preparation and cleaning become available in Phase 3.")
 
 
+def tokenizer_page(config: dict[str, Any]) -> None:
+    """Train and inspect a tokenizer via the Phase 4 backend only."""
+    dataset, preprocessing, settings = config.get("dataset", {}), config.get("preprocessing", {}), config.get("tokenizer", {})
+    try:
+        train_path, preparation_metadata_path, prefix, metadata_path = tokenizer_paths(dataset, preprocessing, settings)
+    except (KeyError, TypeError):
+        st.error("Tokenizer configuration is incomplete.")
+        return
+    model_path = prefix.with_suffix(".model")
+    preparation_metadata = load_metadata(preparation_metadata_path)
+    prepared = train_path.is_file() and train_path.stat().st_size > 0 and (not preparation_metadata or preparation_metadata.get("completed") is True)
+    metadata = load_metadata(metadata_path)
+    st.title("Tokenizer")
+    st.write("**Type:** SentencePiece BPE · shared English–Tagalog vocabulary")
+    st.write("**Training data:** Training split only; validation and test data are excluded.")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Requested vocabulary", settings.get("vocab_size", "Unknown"))
+    col2.metric("Character coverage", settings.get("character_coverage", "Unknown"))
+    col3.metric("Training split", "train.jsonl")
+    st.write(f"**Model path:** {model_path.relative_to(PROJECT_ROOT)}")
+    st.json(settings.get("special_tokens", {}))
+    if not prepared:
+        st.warning("Complete Phase 3 data preparation first.")
+    existing = model_path.is_file()
+    if existing:
+        st.warning("Tokenizer already trained.")
+        if metadata:
+            st.json({key: metadata.get(key) for key in ("requested_vocab_size", "actual_vocab_size", "training_records", "training_text_lines", "pad_id", "unk_id", "bos_id", "eos_id", "trained_at")})
+    force = st.checkbox("Replace existing tokenizer", disabled=not existing)
+    if st.button("Train Tokenizer", type="primary", disabled=not prepared):
+        stage = st.status("Preparing tokenizer...", expanded=True)
+        try:
+            def update_stage(message: str) -> None:
+                stage.write(message)
+            stats = train_tokenizer(config, force=force, progress_callback=update_stage)
+            stage.update(label="Tokenizer training complete", state="complete")
+            st.success(f"Tokenizer trained with {stats.actual_vocab_size} pieces.")
+        except TokenizerTrainingError as error:
+            stage.update(label="Tokenizer training failed", state="error")
+            st.error(str(error))
+
+    if model_path.is_file():
+        tokenizer = SentencePieceTokenizer(model_path)
+        st.subheader("Try the Tokenizer")
+        text = st.text_area("Enter English or Tagalog text", "A group of students are using computers.")
+        add_bos = st.checkbox("Add BOS", value=True)
+        add_eos = st.checkbox("Add EOS", value=True)
+        if st.button("Tokenize"):
+            ids = tokenizer.encode(text, add_bos=add_bos, add_eos=add_eos)
+            st.write("Pieces:", tokenizer.pieces(ids))
+            st.write("IDs:", ids)
+            st.metric("Token count", len(ids))
+            st.write("Decoded:", tokenizer.decode(ids))
+            maximum = config.get("model", {}).get("max_sequence_length", 64)
+            if len(ids) > maximum:
+                st.warning(f"This sequence exceeds the configured model maximum of {maximum} tokens.")
+        st.subheader("Vocabulary preview")
+        st.dataframe([{"ID": index, "Piece": tokenizer.id_to_piece(index)} for index in range(min(20, tokenizer.get_vocab_size()))], use_container_width=True, hide_index=True)
+
+
 def about_page() -> None:
     """Keep the project objective and Phase 2 scope explicit."""
     st.title("About")
@@ -185,13 +254,15 @@ def main() -> None:
     """Render the simple extensible Phase 2 navigation."""
     st.set_page_config(page_title="English–Tagalog Translator", layout="wide")
     config = load_config()
-    page = st.sidebar.radio("Navigation", ("Dashboard", "Dataset", "Data Preparation", "About"))
+    page = st.sidebar.radio("Navigation", ("Dashboard", "Dataset", "Data Preparation", "Tokenizer", "About"))
     if page == "Dashboard":
         dashboard(config)
     elif page == "Dataset":
         dataset_page(config)
     elif page == "Data Preparation":
         preparation_page(config)
+    elif page == "Tokenizer":
+        tokenizer_page(config)
     else:
         about_page()
 
