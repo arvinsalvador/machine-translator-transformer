@@ -6,9 +6,9 @@ Dataset: `visheratin/laion-coco-nllb`
 
 ## Current phase
 
-**Phase 8 – Final Validation and Demo Readiness**
+**Phase 9 – Presentation, Demo Runbook, and Trainer Q&A Preparation**
 
-All seven implementation phases are complete. Phase 8 provides safe final validation and classroom-demo readiness checks without automatically downloading, preprocessing, training, or evaluating anything.
+All implementation and validation phases are complete. Phase 9 adds presentation material only; it does not change the ML architecture or automatically download, preprocess, train, or evaluate anything.
 
 ## Project phases
 
@@ -19,6 +19,21 @@ All seven implementation phases are complete. Phase 8 provides safe final valida
 5. Phase 5 – Transformer Model Implementation (Completed)
 6. Phase 6 – Model Training and Evaluation (Completed)
 7. Phase 7 – Translator Interface (Completed)
+8. Phase 8 – Final Validation and Demo Readiness (Completed)
+9. Phase 9 – Presentation, Demo Runbook, and Trainer Q&A Preparation (Completed)
+
+## Presentation / Demonstration
+
+- [Presentation guide](docs/PRESENTATION_GUIDE.md) — an 8–15 minute discussion script with actual project metrics.
+- [Demo runbook](docs/DEMO_RUNBOOK.md) — pre-demo checks, exact page order, sample inputs, and CLI fallbacks.
+- [Expected trainer Q&A](docs/EXPECTED_QA.md) — likely conceptual and technical questions with concise answers.
+- [Architecture explanation](docs/ARCHITECTURE_EXPLANATION.md) — compact encoder–decoder and training diagrams.
+
+Run the safe final validation before presenting:
+
+```bash
+docker compose run --rm translator python -m src.validate_project --demo
+```
 
 ## Classroom demo sequence
 
