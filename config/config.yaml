@@ -53,3 +53,18 @@ resources:
   allow_cpu_fallback: true
   dataloader_workers: 2
   max_cpu_threads: 2
+
+preprocessing:
+  normalize_unicode: true
+  collapse_whitespace: true
+  remove_control_characters: true
+  deduplicate: true
+  min_words: 1
+  max_words: 50
+  max_characters: 500
+  output_directory: "data/processed"
+  train_file: "train.jsonl"
+  validation_file: "validation.jsonl"
+  test_file: "test.jsonl"
+  metadata_file: "preparation_metadata.json"
+  preview_rows: 5

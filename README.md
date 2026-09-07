@@ -6,15 +6,15 @@ Dataset: `visheratin/laion-coco-nllb`
 
 ## Current phase
 
-**Phase 2 – Dataset Acquisition**
+**Phase 3 – Data Preparation and Dataset Splitting**
 
-Phase 1 is completed. Phase 2 streams `visheratin/laion-coco-nllb` from the train split, extracts English from `eng_caption` and Tagalog from the `tgl_Latn` caption, and stores only minimal JSONL pairs. It never downloads image URLs, materializes the full dataset, trains a model, or translates text.
+Phase 1 is completed. Phase 2 streams minimal English–Tagalog JSONL pairs. Phase 3 validates those pairs, conservatively normalizes text, removes duplicate pairs, and creates deterministic training, validation, and testing splits. Tokenizer training remains Phase 4.
 
 ## Project phases
 
 1. Phase 1 – Project Setup and Resource Configuration (Completed)
-2. Phase 2 – Dataset Acquisition (Current)
-3. Phase 3 – Data Preparation
+2. Phase 2 – Dataset Acquisition (Completed / available)
+3. Phase 3 – Data Preparation and Dataset Splitting (Current)
 4. Phase 4 – Tokenizer Training
 5. Phase 5 – Transformer Model Implementation
 6. Phase 6 – Model Training and Evaluation
@@ -60,3 +60,27 @@ docker compose run --rm --service-ports translator streamlit run app/app.py --se
 ```
 
 Then open `http://localhost:8501`. The Dataset page defaults to Quick mode and previews only the first few saved records.
+
+## Data preparation
+
+Phase 3 reads the raw JSONL line by line, preserves linguistic casing and punctuation, applies NFC/whitespace/control-character normalization, rejects structurally invalid or oversized pairs, and removes duplicate English–Tagalog pairs before splitting. Word counts use `text.split()` as a simple safeguard; this is not tokenizer tokenization.
+
+The exact deterministic split uses the configured random seed:
+
+- Training: 80% — used to update Transformer weights in a later phase.
+- Validation: 10% — used to monitor model development and training.
+- Testing: 10% — held out for later final evaluation.
+
+```bash
+docker compose run --rm translator python -m src.prepare_data
+docker compose run --rm translator python -m src.prepare_data --force
+```
+
+Successful preparation creates:
+
+- `data/processed/train.jsonl`
+- `data/processed/validation.jsonl`
+- `data/processed/test.jsonl`
+- `data/processed/preparation_metadata.json`
+
+The command requires a completed Phase 2 acquisition and refuses to overwrite existing processed output unless `--force` is supplied. Use the Streamlit command above and select **Data Preparation** to run the same backend through the UI.

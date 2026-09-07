@@ -10,6 +10,7 @@ import streamlit as st
 import yaml
 
 from src.acquire_dataset import AcquisitionError, AcquisitionStats, acquire_dataset, get_output_paths
+from src.prepare_data import PreparationError, PreparationStats, get_paths, prepare_dataset
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -55,14 +56,71 @@ def dashboard(config: dict[str, Any]) -> None:
     """Show project phase and resource settings."""
     dataset = config.get("dataset", {})
     st.title("English → Tagalog Transformer Translator")
-    st.subheader("Phase 2 – Dataset Acquisition")
+    raw_metadata = load_metadata(PROJECT_ROOT / config.get("dataset", {}).get("acquisition", {}).get("metadata_file", ""))
+    phase_two = "Completed" if raw_metadata and raw_metadata.get("completed") else "Available (not completed)"
+    st.subheader("Phase 3 – Data Preparation")
     st.success("Phase 1 – Project Setup: Completed")
-    st.info("Phase 2 – Dataset Acquisition: Current")
-    st.write("Phase 3 – Data Preparation through Phase 7 – Translator Interface: Not Started")
+    st.write(f"Phase 2 – Dataset Acquisition: {phase_two}")
+    st.info("Phase 3 – Data Preparation: Current")
+    st.write("Phase 4 – Tokenizer Training through Phase 7 – Translator Interface: Not Started")
     col1, col2, col3 = st.columns(3)
     col1.metric("Dataset maximum", dataset.get("max_samples", "Unknown"))
     col2.metric("Quick mode samples", dataset.get("quick_samples", "Unknown"))
     col3.metric("Docker limits", "2 CPUs / 4 GB")
+
+
+def preparation_page(config: dict[str, Any]) -> None:
+    """Run the shared Phase 3 backend and show only bounded file previews."""
+    dataset, settings = config.get("dataset", {}), config.get("preprocessing", {})
+    try:
+        raw_path, metadata_path, outputs = get_paths(dataset, settings)
+    except (KeyError, TypeError):
+        st.error("Preprocessing configuration is incomplete.")
+        return
+    st.title("Data Preparation")
+    st.write(f"**Input raw dataset:** {raw_path.relative_to(PROJECT_ROOT)}")
+    raw_metadata = load_metadata(raw_path.parent / dataset.get("acquisition", {}).get("metadata_file", "").split("/")[-1])
+    if raw_metadata:
+        st.metric("Raw pair count", raw_metadata.get("pairs_saved", "Unknown"))
+    st.json({key: settings.get(key) for key in ("normalize_unicode", "collapse_whitespace", "remove_control_characters", "deduplicate", "min_words", "max_words", "max_characters")})
+    st.write(f"Split: {dataset.get('train_ratio')} / {dataset.get('validation_ratio')} / {dataset.get('test_ratio')} · Seed: {config.get('project', {}).get('random_seed')}")
+    raw_ready = raw_path.is_file() and raw_path.stat().st_size > 0 and (not raw_metadata or raw_metadata.get("completed") is True)
+    if not raw_ready:
+        st.warning("Complete Phase 2 dataset acquisition first.")
+    existing = any(path.exists() for path in (*outputs.values(), metadata_path))
+    if existing:
+        st.warning("Processed dataset already exists.")
+    force = st.checkbox("Replace existing processed dataset", disabled=not existing)
+    if st.button("Prepare Dataset", type="primary", disabled=not raw_ready):
+        progress_bar, status = st.progress(0), st.empty()
+
+        def update_progress(stats: PreparationStats) -> None:
+            progress_bar.progress(min(stats.raw_records / max(stats.raw_records + 1, 1), 0.99))
+            status.write(f"Processed: {stats.raw_records} · Accepted: {stats.accepted_records} · Duplicates: {stats.duplicates}")
+
+        try:
+            stats = prepare_dataset(config, force=force, progress_callback=update_progress)
+            progress_bar.progress(1.0)
+            st.success("Dataset preparation complete. The project is ready for Phase 4 – Tokenizer Training.")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Raw", stats.raw_records)
+            col2.metric("Clean", stats.accepted_records)
+            col3.metric("Duplicates", stats.duplicates)
+            col4.metric("Rejected", stats.raw_records - stats.accepted_records - stats.duplicates)
+        except PreparationError as error:
+            st.error(str(error))
+
+    metadata = load_metadata(metadata_path)
+    if metadata:
+        st.subheader("Preparation statistics")
+        st.json({key: metadata.get(key) for key in ("raw_records", "accepted_records", "malformed_json", "missing_english", "missing_tagalog", "empty_english", "empty_tagalog", "too_long", "duplicates", "train_records", "validation_records", "test_records", "processed_at")})
+        st.bar_chart({"Train": [metadata.get("train_records", 0)], "Validation": [metadata.get("validation_records", 0)], "Test": [metadata.get("test_records", 0)]})
+    if all(path.is_file() for path in outputs.values()):
+        st.subheader("Processed split previews")
+        tabs = st.tabs(("Training", "Validation", "Testing"))
+        for tab, split in zip(tabs, ("train", "validation", "test")):
+            with tab:
+                st.dataframe(read_preview(outputs[split], int(settings.get("preview_rows", 5))), use_container_width=True, hide_index=True)
 
 
 def dataset_page(config: dict[str, Any]) -> None:
@@ -120,18 +178,20 @@ def about_page() -> None:
     """Keep the project objective and Phase 2 scope explicit."""
     st.title("About")
     st.write("This project will implement a small custom PyTorch Transformer encoder-decoder for English → Tagalog translation.")
-    st.write("Phase 2 streams only the configured number of raw text pairs. It does not download images, train a model, or translate text.")
+    st.write("Phases 2 and 3 acquire and prepare only raw text pairs. They do not download images, train a tokenizer or model, or translate text.")
 
 
 def main() -> None:
     """Render the simple extensible Phase 2 navigation."""
     st.set_page_config(page_title="English–Tagalog Translator", layout="wide")
     config = load_config()
-    page = st.sidebar.radio("Navigation", ("Dashboard", "Dataset", "About"))
+    page = st.sidebar.radio("Navigation", ("Dashboard", "Dataset", "Data Preparation", "About"))
     if page == "Dashboard":
         dashboard(config)
     elif page == "Dataset":
         dataset_page(config)
+    elif page == "Data Preparation":
+        preparation_page(config)
     else:
         about_page()
 
