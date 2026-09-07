@@ -16,6 +16,8 @@ from src.train_tokenizer import TokenizerTrainingError, TokenizerTrainingStats, 
 from src.inspect_model import synthetic_validation
 from src.model import architecture_summary, build_model
 from src.tokenizer_utils import load_tokenizer
+from src.train import TrainingError, train_model
+from src.evaluate import evaluate_model
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -67,13 +69,15 @@ def dashboard(config: dict[str, Any]) -> None:
     tokenizer_settings = config.get("tokenizer", {})
     preparation_metadata = load_metadata(PROJECT_ROOT / preprocessing.get("output_directory", "") / preprocessing.get("metadata_file", ""))
     tokenizer_metadata = load_metadata((PROJECT_ROOT / tokenizer_settings.get("model_prefix", "data/tokenizer/en_tl")).parent / tokenizer_settings.get("metadata_file", "tokenizer_metadata.json"))
-    st.subheader("Phase 5 – Transformer Model")
+    training_metadata = load_metadata(PROJECT_ROOT / config.get("training", {}).get("checkpoint", {}).get("metadata_file", ""))
+    st.subheader("Phase 6 – Training and Evaluation")
     st.success("Phase 1 – Project Setup: Completed")
     st.write(f"Phase 2 – Dataset Acquisition: {phase_two}")
     st.write("Phase 3 – Data Preparation: " + ("Completed" if preparation_metadata and preparation_metadata.get("completed") else "Available (not completed)"))
     st.write("Phase 4 – Tokenizer Training: " + ("Completed" if tokenizer_metadata and tokenizer_metadata.get("completed") else "Available (not completed)"))
-    st.info("Phase 5 – Transformer Model: Current")
-    st.write("Phase 6 – Training & Evaluation through Phase 7 – Translator Interface: Not Started")
+    st.success("Phase 5 – Transformer Model: Completed")
+    st.info("Phase 6 – Training & Evaluation: " + ("Completed" if training_metadata and training_metadata.get("completed") else "Current"))
+    st.write("Phase 7 – Translator Interface: Not Started")
     if tokenizer_metadata and tokenizer_metadata.get("completed"):
         st.success("A tokenizer has already been trained.")
     col1, col2, col3 = st.columns(3)
@@ -283,6 +287,41 @@ def model_page(config: dict[str, Any]) -> None:
             st.error(str(error))
 
 
+def training_page(config: dict[str, Any]) -> None:
+    """Run the bounded Phase 6 backend synchronously after deliberate user action."""
+    st.title("Training")
+    settings = config.get("training", {})
+    profile = st.selectbox("Training mode", ("quick", "normal"), index=0)
+    profile_settings = settings.get("profiles", {}).get(profile, {})
+    st.write(f"Batch size: {settings.get('batch_size')} · Learning rate: {settings.get('learning_rate')} · Gradient clip: {settings.get('gradient_clip_norm')}")
+    st.info("Quick mode validates the complete pipeline with limited records and is the recommended first run.")
+    confirmation = st.checkbox("I understand Normal training uses the full prepared split and may take longer.") if profile == "normal" else True
+    force = st.checkbox("Replace existing training checkpoints")
+    if st.button("Start Training", type="primary", disabled=not confirmation):
+        progress = st.empty()
+        def update(event: dict) -> None: progress.write(f"Epoch {event.get('epoch', '')}: {event.get('event', '')}")
+        try:
+            result = train_model(config, profile=profile, force=force, progress_callback=update)
+            st.success(f"Training complete. Best validation loss: {result['best_validation_loss']:.4f}")
+            st.line_chart({"training": [item["training_loss"] for item in result["history"]], "validation": [item["validation_loss"] for item in result["history"]]})
+        except TrainingError as error: st.error(str(error))
+    st.caption("Teacher forcing supplies correct previous Tagalog tokens to predict the next token. Validation loss drives early stopping.")
+
+
+def evaluation_page(config: dict[str, Any]) -> None:
+    """Run the test-only bounded evaluation backend; no public translator is enabled."""
+    st.title("Evaluation")
+    maximum = config.get("evaluation", {}).get("maximum_samples", 2000)
+    limit = st.selectbox("Test samples", [50, 100, 200, 500, maximum], index=2)
+    if st.button("Evaluate Model", type="primary"):
+        try:
+            result = evaluate_model(config, limit=min(limit, maximum))
+            cols = st.columns(3); cols[0].metric("BLEU", f"{result['bleu']:.2f}"); cols[1].metric("chrF", f"{result['chrf']:.2f}"); cols[2].metric("Samples", result["test_samples_evaluated"])
+            st.dataframe(result["examples"], use_container_width=True, hide_index=True)
+        except TrainingError as error: st.error(str(error))
+    st.caption("BLEU measures n-gram overlap; chrF measures character n-gram similarity. References are dataset translations, not manually verified human references.")
+
+
 def about_page() -> None:
     """Keep the project objective and Phase 2 scope explicit."""
     st.title("About")
@@ -294,7 +333,7 @@ def main() -> None:
     """Render the simple extensible Phase 2 navigation."""
     st.set_page_config(page_title="English–Tagalog Translator", layout="wide")
     config = load_config()
-    page = st.sidebar.radio("Navigation", ("Dashboard", "Dataset", "Data Preparation", "Tokenizer", "Model", "About"))
+    page = st.sidebar.radio("Navigation", ("Dashboard", "Dataset", "Data Preparation", "Tokenizer", "Model", "Training", "Evaluation", "About"))
     if page == "Dashboard":
         dashboard(config)
     elif page == "Dataset":
@@ -305,6 +344,10 @@ def main() -> None:
         tokenizer_page(config)
     elif page == "Model":
         model_page(config)
+    elif page == "Training":
+        training_page(config)
+    elif page == "Evaluation":
+        evaluation_page(config)
     else:
         about_page()
 

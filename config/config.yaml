@@ -47,11 +47,27 @@ training:
   batch_size: 16
   epochs: 5
   learning_rate: 0.0003
+  optimizer: "adamw"
+  gradient_clip_norm: 1.0
+  shuffle: true
   early_stopping:
     enabled: true
     patience: 2
   checkpoint:
-    save_best_only: true
+    save_best_only: false
+    best_file: "models/checkpoints/best_model.pt"
+    last_file: "models/checkpoints/last_model.pt"
+    history_file: "models/checkpoints/training_history.json"
+    metadata_file: "models/checkpoints/training_metadata.json"
+  profiles:
+    quick:
+      max_train_records: 1000
+      max_validation_records: 200
+      epochs: 2
+    normal:
+      max_train_records: null
+      max_validation_records: null
+      epochs: 5
 resources:
   prefer_gpu: true
   allow_cpu_fallback: true
@@ -72,3 +88,10 @@ preprocessing:
   test_file: "test.jsonl"
   metadata_file: "preparation_metadata.json"
   preview_rows: 5
+
+evaluation:
+  default_max_samples: 200
+  maximum_samples: 2000
+  decoding: "greedy"
+  results_file: "models/checkpoints/evaluation_results.json"
+  example_limit: 10

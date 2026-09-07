@@ -6,9 +6,9 @@ Dataset: `visheratin/laion-coco-nllb`
 
 ## Current phase
 
-**Phase 5 – Transformer Encoder–Decoder Model**
+**Phase 6 – Transformer Training and Evaluation**
 
-Phases 1–4 are completed. Phase 5 implements the compact custom PyTorch Transformer encoder–decoder. It is **untrained**: no optimizer, loss calculation, backpropagation, checkpoint, BLEU, or translation is performed until Phase 6.
+Phases 1–5 are completed. Phase 6 trains the small custom Transformer with teacher forcing, cross-entropy loss, AdamW, validation-based early stopping, bounded checkpoints, and held-out test evaluation.
 
 ## Project phases
 
@@ -16,8 +16,8 @@ Phases 1–4 are completed. Phase 5 implements the compact custom PyTorch Transf
 2. Phase 2 – Dataset Acquisition (Completed / available)
 3. Phase 3 – Data Preparation and Dataset Splitting (Completed)
 4. Phase 4 – Tokenizer Training (Completed)
-5. Phase 5 – Transformer Model Implementation (Current)
-6. Phase 6 – Model Training and Evaluation
+5. Phase 5 – Transformer Model Implementation (Completed)
+6. Phase 6 – Model Training and Evaluation (Current)
 7. Phase 7 – Translator Interface
 
 ## Resource limits
@@ -123,3 +123,26 @@ docker compose run --rm translator python -m unittest discover -s tests -v
 ```
 
 Use the Streamlit command above and select **Model** for an architecture diagram, parameter counts, and the same no-grad synthetic validation. Training becomes available in Phase 6.
+
+## Training and evaluation
+
+Quick training is the default safe profile: up to 1,000 training pairs, 200 validation pairs, and 2 epochs. Normal training uses the complete prepared splits for up to 5 epochs. Dynamic per-batch padding minimizes memory use. During teacher forcing, the decoder receives the correct previous Tagalog tokens and learns to predict the next one. Padding is excluded from cross-entropy loss.
+
+```bash
+# Recommended first run
+docker compose run --rm translator python -m src.train --profile quick
+
+# Full bounded training
+docker compose run --rm translator python -m src.train --profile normal
+
+# Continue an interrupted run
+docker compose run --rm translator python -m src.train --profile normal --resume
+
+# Deliberately replace existing checkpoints
+docker compose run --rm translator python -m src.train --profile quick --force
+
+# Evaluate best_model.pt on the held-out test split
+docker compose run --rm translator python -m src.evaluate --limit 200
+```
+
+Only `models/checkpoints/best_model.pt` and `last_model.pt` are retained, alongside `training_history.json`, `training_metadata.json`, and `evaluation_results.json`. Evaluation uses greedy decoding on the test split only, and reports BLEU and chrF against dataset reference translations. Phase 7 will provide the public interactive translator.
