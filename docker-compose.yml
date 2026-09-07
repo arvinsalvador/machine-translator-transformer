@@ -10,6 +10,7 @@ services:
       OMP_NUM_THREADS: "2"
       MKL_NUM_THREADS: "2"
       TOKENIZERS_PARALLELISM: "false"
+      PYTHONPATH: "/app"
     cpus: 2.0
     mem_limit: 4g
     command: python -m src.check_environment

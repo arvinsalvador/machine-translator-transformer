@@ -56,7 +56,7 @@ An existing non-empty raw JSONL file is protected from accidental replacement. U
 Start the Dataset UI with:
 
 ```bash
-docker compose run --rm --service-ports translator streamlit run app/app.py --server.address 0.0.0.0
+docker compose run --rm --service-ports translator python -m streamlit run app/app.py --server.address=0.0.0.0
 ```
 
 Then open `http://localhost:8501`. The Dataset page defaults to Quick mode and previews only the first few saved records.
