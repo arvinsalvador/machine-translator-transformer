@@ -6,9 +6,9 @@ Dataset: `visheratin/laion-coco-nllb`
 
 ## Current phase
 
-**Phase 7 – Translator Inference and Final UI**
+**Phase 8 – Final Validation and Demo Readiness**
 
-All seven phases are implemented. Phase 7 loads the locally trained best checkpoint and SentencePiece tokenizer for bounded greedy English → Tagalog inference. No online translation API or pretrained translation model is used.
+All seven implementation phases are complete. Phase 8 provides safe final validation and classroom-demo readiness checks without automatically downloading, preprocessing, training, or evaluating anything.
 
 ## Project phases
 
@@ -18,7 +18,40 @@ All seven phases are implemented. Phase 7 loads the locally trained best checkpo
 4. Phase 4 – Tokenizer Training (Completed)
 5. Phase 5 – Transformer Model Implementation (Completed)
 6. Phase 6 – Model Training and Evaluation (Completed)
-7. Phase 7 – Translator Interface (Current)
+7. Phase 7 – Translator Interface (Completed)
+
+## Classroom demo sequence
+
+```bash
+# 1. Validate the environment
+docker compose run --rm translator python -m src.check_environment
+
+# 2. Run complete safe demo validation
+docker compose run --rm translator python -m src.validate_project --demo
+
+# Fast artifact-only status
+docker compose run --rm translator python -m src.validate_project --status-only
+
+# 3. Demonstrate the trained model from the CLI
+docker compose run --rm translator python -m src.inference --text "A student is reading a book."
+
+# 4. Start the final UI
+docker compose run --rm --service-ports translator python -m streamlit run app/app.py --server.address=0.0.0.0
+```
+
+Open `http://localhost:8501`. Useful short demonstration inputs include “A dog is running outside.”, “A woman is holding an umbrella.”, and “A child is playing with a ball.” Outputs are always generated live by the trained checkpoint.
+
+## How the model works
+
+- **BPE:** SentencePiece divides English and Tagalog into reusable subword units.
+- **Encoder:** Processes the complete English sentence and produces contextual representations.
+- **Self-attention:** Lets tokens identify other relevant tokens in the same sequence.
+- **Decoder:** Generates Tagalog tokens autoregressively while attending to encoder output.
+- **Masked self-attention:** Prevents the decoder from seeing future target tokens during training.
+- **Cross-attention:** Lets the decoder attend to English encoder representations.
+- **Teacher forcing:** Supplies correct previous Tagalog tokens during training to predict the next token.
+
+Training data updates model weights, validation data monitors generalization and early stopping, and test data is used only afterward for BLEU/chrF evaluation. The architecture is intentionally small—`d_model=128`, four heads, two encoder and decoder layers, limited data, and at most five epochs—to control CPU, RAM, disk, network use, and training time.
 
 ## Resource limits
 

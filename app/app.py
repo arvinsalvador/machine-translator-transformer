@@ -71,20 +71,28 @@ def dashboard(config: dict[str, Any]) -> None:
     preparation_metadata = load_metadata(PROJECT_ROOT / preprocessing.get("output_directory", "") / preprocessing.get("metadata_file", ""))
     tokenizer_metadata = load_metadata((PROJECT_ROOT / tokenizer_settings.get("model_prefix", "data/tokenizer/en_tl")).parent / tokenizer_settings.get("metadata_file", "tokenizer_metadata.json"))
     training_metadata = load_metadata(PROJECT_ROOT / config.get("training", {}).get("checkpoint", {}).get("metadata_file", ""))
-    st.subheader("Phase 6 – Training and Evaluation")
+    evaluation_metadata = load_metadata(PROJECT_ROOT / config.get("evaluation", {}).get("results_file", ""))
+    checkpoint_path = PROJECT_ROOT / config.get("training", {}).get("checkpoint", {}).get("best_file", "models/checkpoints/best_model.pt")
+    st.subheader("Complete Seven-Phase Pipeline")
     st.success("Phase 1 – Project Setup: Completed")
     st.write(f"Phase 2 – Dataset Acquisition: {phase_two}")
     st.write("Phase 3 – Data Preparation: " + ("Completed" if preparation_metadata and preparation_metadata.get("completed") else "Available (not completed)"))
     st.write("Phase 4 – Tokenizer Training: " + ("Completed" if tokenizer_metadata and tokenizer_metadata.get("completed") else "Available (not completed)"))
     st.success("Phase 5 – Transformer Model: Completed")
-    st.info("Phase 6 – Training & Evaluation: " + ("Completed" if training_metadata and training_metadata.get("completed") else "Current"))
-    st.write("Phase 7 – Translator Interface: Not Started")
+    st.write("Phase 6 – Training & Evaluation: " + ("Completed" if training_metadata and training_metadata.get("completed") and evaluation_metadata else "Needs Attention"))
+    st.info("Phase 7 – Translator Interface: " + ("Completed" if checkpoint_path.is_file() and tokenizer_metadata else "Needs Attention"))
     if tokenizer_metadata and tokenizer_metadata.get("completed"):
         st.success("A tokenizer has already been trained.")
     col1, col2, col3 = st.columns(3)
     col1.metric("Dataset maximum", dataset.get("max_samples", "Unknown"))
     col2.metric("Quick mode samples", dataset.get("quick_samples", "Unknown"))
     col3.metric("Docker limits", "2 CPUs / 4 GB")
+    if training_metadata:
+        st.write(f"Model checkpoint: best_model.pt · Profile: {training_metadata.get('profile', 'Not Available')} · Best epoch: {training_metadata.get('best_epoch', 'Not Available')}")
+    if evaluation_metadata:
+        metric1, metric2 = st.columns(2)
+        metric1.metric("BLEU", f"{evaluation_metadata.get('bleu', 0):.2f}")
+        metric2.metric("chrF", f"{evaluation_metadata.get('chrf', 0):.2f}")
 
 
 def preparation_page(config: dict[str, Any]) -> None:
@@ -362,7 +370,8 @@ def about_page() -> None:
     """Keep the project objective and Phase 2 scope explicit."""
     st.title("About")
     st.write("This project will implement a small custom PyTorch Transformer encoder-decoder for English → Tagalog translation.")
-    st.write("Phases 2 and 3 acquire and prepare only raw text pairs. They do not download images, train a tokenizer or model, or translate text.")
+    st.write("Technology: Python, PyTorch, SentencePiece, Hugging Face Datasets, SacreBLEU, Streamlit, and Docker.")
+    st.code("Dataset → Cleaning → Train/Validation/Test → SentencePiece → Transformer Training → best_model.pt → English Input → Encoder/Decoder → Tagalog Output")
 
 
 def main() -> None:
